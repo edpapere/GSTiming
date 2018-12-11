@@ -12,6 +12,10 @@
              |         |    |        | 
         PC3  | PC3     | A3 |  M.BTN |>--------> GATE BEACON MODE BUTTON -- 
              |         |    |        | 
+        PC7  | ADC7    | A7 |  BAT.V |>--------> BATERY VOLTMETER -------------------.
+             |         |    |        |                                               |            
+             |         |    RAW.V.IN | ------------------------------------[R=200K]--+--[R=100K]-----| GND
+             |         |    |        | 
         PB1  | PB1     |  9 | RF.RST |---------- RFID-RC522 RST
         PB2  | nSS     | 10 |    SDA |---------- RFID-RC522 SDA
         PB3  | MOSI    | 11 |   MOSI |---------- RFID-RC522 MOSI
@@ -21,7 +25,7 @@
         ----------------------------- 
 */
 
-#define __USE_MFRC522__
+//#define __USE_MFRC522__
 
 #ifdef F_CPU
   #if F_CPU == 16000000L        //  16 MHz
@@ -55,6 +59,8 @@
 #define GATE_MODE_PIN_INTERIM1  15  // A1 -- PC1
 
 #define GATE_MODE_BUTTON_PIN    17  // A3 -- PC3
+
+#define VOLTMETER_PIN           A7  // A7 -- PC7
 
 #if IR_LED_PIN == 11
   #define IR_LED_OC2x0  COM2A0  // Toggle OC2B in
@@ -153,7 +159,7 @@ void loop() {
   // <2> -- Gate ID: string of 8 hexadecimal digits
   // <3> -- RFID Card UID of current participant: string of 8 or 16 hexadecimal digits
   // <hh> -- Checksum (two hexadecimal digits)
-
+ 
   String gateStart  = "START";
   String gateFinish = "FINISH";
 
@@ -199,6 +205,12 @@ void loop() {
     Serial.println(gateString);
     Serial.flush();
   }
+// ----------------------------------------------
+  float voltage = analogRead(VOLTMETER_PIN) * (5.0 / 1023.0);  
+  Serial.print("$PGSTV,");
+  Serial.println(voltage);
+  Serial.flush();
+// ----------------------------------------------
   Serial.println("--==<>==--");
 //  Serial.println("-------------------");
   Serial.flush();
@@ -215,4 +227,3 @@ void loop() {
 //    delay(50);                       // wait for a second
 
 }
-
