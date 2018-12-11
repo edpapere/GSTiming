@@ -3,6 +3,9 @@
         pin    func     pin    func
         ----------------------------- 
              |         |    |        |
+        PD5  | PD5     |  5 |  BTN.2 |>--------> BUTTON 2 (SET AS FINISH GATE BEACON)
+        PD4  | PD4     |  4 |  BTN.1 |>--------> BUTTON 1 (SET AS START GATE BEACON)
+             |         |    |        | 
         PD3  | OC2B    |  3 | IR.AND |>--------> IR LED ANODE @ 38 kHz
         PD1  | TXD     | TX | IR.CAT |>--------> IR LED CATHODE @ TX
              |         |    |        | 
@@ -11,10 +14,6 @@
         PC2  | PC2     | A2 |  R.LED |>--------> FINISH GATE BEACON MODE INDICATOR -- RED LED CATHODE
              |         |    |        | 
         PC3  | PC3     | A3 |  M.BTN |>--------> GATE BEACON MODE BUTTON -- 
-             |         |    |        | 
-        PC7  | ADC7    | A7 |  BAT.V |>--------> BATERY VOLTMETER -------------------.
-             |         |    |        |                                               |            
-             |         |    RAW.V.IN | ------------------------------------[R=200K]--+--[R=100K]-----| GND
              |         |    |        | 
         PB1  | PB1     |  9 | RF.RST |---------- RFID-RC522 RST
         PB2  | nSS     | 10 |    SDA |---------- RFID-RC522 SDA
@@ -49,6 +48,8 @@
 #include <MFRC522.h>
 #endif
 
+#include <EEPROM.h>
+
 //#define STATUS_LED_PIN          LED_BUILTIN
 #define STATUS_LED_PIN          15  // A1 -- PC1
 
@@ -58,9 +59,8 @@
 #define GATE_MODE_PIN_FINISH    16  // A2 -- PC2
 #define GATE_MODE_PIN_INTERIM1  15  // A1 -- PC1
 
-#define GATE_MODE_BUTTON_PIN    17  // A3 -- PC3
-
-#define VOLTMETER_PIN           A7  // A7 -- PC7
+#define BUTTON_1_PIN             4  // D4 -- PD4
+#define BUTTON_2_PIN             5  // D5 -- PD5
 
 #if IR_LED_PIN == 11
   #define IR_LED_OC2x0  COM2A0  // Toggle OC2B in
@@ -74,11 +74,57 @@
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 #endif
 
+// Run-time global variables:
+
+int beaconMode;
+#define __BEACON_MODE_START   1
+#define __BEACON_MODE_FINISH  2
+int beaconModeAddress = 0;
+
+#define BEACON_ID char[10]
+char beaconId[10] = "A536C98D";
+int beaconIdAddress = beaconModeAddress + sizeof(beaconMode);
+String gateID;
+
 // ====================================================================
 // the setup function runs once when you press reset or power the board
 // --------------------------------------------------------------------
 void setup() 
 {
+  
+  // Setup control buttons and read their state:
+  pinMode(BUTTON_1_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_2_PIN, INPUT_PULLUP);
+  int button1 = digitalRead(BUTTON_1_PIN);
+  int button2 = digitalRead(BUTTON_2_PIN);
+
+  // Set and save configuration according to combination of button pressed 
+  if ( button1 == LOW && button2 == HIGH )        // only button #1 is pressed 
+  {
+    // Configure module as Start Gate Beacon 
+    beaconMode = __BEACON_MODE_START;
+    EEPROM.put(beaconModeAddress,beaconMode);
+  }
+  else if ( button1 == HIGH && button2 == LOW )   // only button #2 is pressed
+  {
+    // Configure module as Finish Gate Beacon 
+    beaconMode = __BEACON_MODE_FINISH;
+    EEPROM.put(beaconModeAddress,beaconMode);
+  }
+  else if ( button1 == LOW && button2 == LOW )    // both buttons are pressed
+  {
+    // Configure module as Finish Gate Beacon and set default Beacon ID 
+    beaconMode = __BEACON_MODE_FINISH;
+    EEPROM.put(beaconModeAddress,beaconMode);
+    EEPROM.put(beaconIdAddress,beaconId);
+  }
+  
+  // Get current configuration from EEPROM
+  EEPROM.get(beaconModeAddress,beaconMode);
+  EEPROM.get(beaconIdAddress,beaconId);
+  gateID = String(beaconId);
+
+  // --------------------------------
   
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(STATUS_LED_PIN, OUTPUT);
@@ -113,8 +159,6 @@ void setup()
   digitalWrite(GATE_MODE_PIN_INTERIM1, HIGH);
   delay(200);
 
-  pinMode(GATE_MODE_BUTTON_PIN, INPUT);
-
   digitalWrite(GATE_MODE_PIN_START,    HIGH);
   digitalWrite(GATE_MODE_PIN_FINISH,   HIGH);
   digitalWrite(GATE_MODE_PIN_INTERIM1, HIGH);
@@ -147,11 +191,9 @@ void loop() {
   int activityLED = digitalRead(STATUS_LED_PIN);
   digitalWrite(STATUS_LED_PIN, activityLED != HIGH ? HIGH : LOW);
 
-  int beaconMode = digitalRead(GATE_MODE_BUTTON_PIN);
-  digitalWrite(GATE_MODE_PIN_START,  beaconMode == HIGH ? HIGH : LOW);
-  digitalWrite(GATE_MODE_PIN_FINISH, beaconMode != HIGH ? HIGH : LOW);
+  digitalWrite(GATE_MODE_PIN_START,  beaconMode == __BEACON_MODE_START);
+  digitalWrite(GATE_MODE_PIN_FINISH, beaconMode == __BEACON_MODE_FINISH);
 
-  String gateID = "A536C98D";
   // 1010 0101 0011 0110 1100 1001 1000 1101 
   // $PGSTB -- Giant Slalom Timing System Gate Beacon
   // $PGSTB,<1>,<2>,<3>*<hh>
@@ -159,7 +201,7 @@ void loop() {
   // <2> -- Gate ID: string of 8 hexadecimal digits
   // <3> -- RFID Card UID of current participant: string of 8 or 16 hexadecimal digits
   // <hh> -- Checksum (two hexadecimal digits)
- 
+
   String gateStart  = "START";
   String gateFinish = "FINISH";
 
@@ -181,7 +223,7 @@ void loop() {
 
   // Build NMEA-0183 message string
   String gateString = "$PGSTB,";
-  gateString.concat( beaconMode == LOW ? gateStart : gateFinish );
+  gateString.concat( beaconMode == __BEACON_MODE_START ? gateStart : gateFinish );
   gateString.concat( "," );
   gateString.concat( gateID );
   gateString.concat( "," );
@@ -205,12 +247,6 @@ void loop() {
     Serial.println(gateString);
     Serial.flush();
   }
-// ----------------------------------------------
-  float voltage = analogRead(VOLTMETER_PIN) * (5.0 / 1023.0);  
-  Serial.print("$PGSTV,");
-  Serial.println(voltage);
-  Serial.flush();
-// ----------------------------------------------
   Serial.println("--==<>==--");
 //  Serial.println("-------------------");
   Serial.flush();
