@@ -1,0 +1,60 @@
+
+
+                       +------------------------------------+   x   x
+                       |                                    |   |   |
+                       |                              ---------------------------
+                       |                             |     (A) (A) (G)           |
+                       |                             |      7   6   N            |
+                       |                             |              D            |
+                       |                             |                           |
+                       |                             | (10) SDA              (9) |--x
+                       |                             |                           |
+                       |                             | (11) MOSI             (8) |--x
+                       |                             |                           |
+                       |                             | (12) MISO             (7) |--x
+                       |                             |                           |
+                       |                             | (13) SCK              (6) |--x
+                       |                             |                           |              ---- BTN.2
+                       |       GREEN LED CATHODE ----| (A0)             PD5  (5) |---------------''----------+ 
+                       |                             |                           |              ---- BTN.1   |
+                       |      YELLOW LED CATHODE ----| (A1)             PD4  (4) |---------------''----------+
+                       |                             |                           |                           |
+                       |         RED LED CATHODE ----| (A2)             OC2B (3) |-----------+              ---
+                       |                             |                           |           |              GND
+                       |             MODE BUTTON ----| (A3)                  (2) |          ---
+                       |                             |                           |          \ / IR LED
+                       |                           --| VCC                   GND |--        ---
+                       |                             |                           |           |
+                       |                          x--| RST                   RST |--x        |
+                       |                             |                           |           |
+                       +-----[R=100K]----------------| GND                   RXD |--x        |
+                       |                             |                           |           |
+                       +-----[R=200K]----------------| RAW                   TXD |-----------+ 
+                                                     |                           |
+                                                      ---------------------------
+		
+
+        MCU    MCU      Nano    My
+        pin    func     pin    func
+        ----------------------------- 
+             |         |    |        |
+        PD3  | OC2B    |  3 | IR.AND |>--------> IR LED ANODE @ 38 kHz
+        PD1  | TXD     | TX | IR.CAT |>--------> IR LED CATHODE @ TX
+             |         |    |        | 
+        PC0  | PC0     | A0 |  G.LED |>--------> START GATE BEACON MODE INDICATOR  -- GREEN LED CATHODE
+        PC1  | PC1     | A1 |  Y.LED |>--------> ACTIVE STATUS INDICATOR           -- YELLOW LED CATHODE
+        PC2  | PC2     | A2 |  R.LED |>--------> FINISH GATE BEACON MODE INDICATOR -- RED LED CATHODE
+             |         |    |        | 
+        PC3  | PC3     | A3 |  M.BTN |>--------> GATE BEACON MODE BUTTON -- 
+             |         |    |        | 
+        PC7  | ADC7    | A7 |  BAT.V |>--------> BATERY VOLTMETER -------------------.
+             |         |    |        |                                               |            
+             |         |    RAW.V.IN | ---------------------------------+--[R=200K]--+--[R=100K]-----| GND
+             |         |    |        | 
+        PB1  | PB1     |  9 | RF.RST |---------- RFID-RC522 RST
+        PB2  | nSS     | 10 |    SDA |---------- RFID-RC522 SDA
+        PB3  | MOSI    | 11 |   MOSI |---------- RFID-RC522 MOSI
+        PB4  | MISO    | 12 |   MISO |---------- RFID-RC522 MISO
+        PB5  | SCK     | 13 |    SCK |---------- RFID-RC522 SCK
+             |         |    |        | 
+        ----------------------------- 
