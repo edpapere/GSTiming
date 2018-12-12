@@ -62,6 +62,10 @@
 #define BUTTON_1_PIN             4  // D4 -- PD4
 #define BUTTON_2_PIN             5  // D5 -- PD5
 
+#define VOLTMETER_PIN           A7  // A7 -- A7
+#define VOLTMETER_REF          3.3  // 
+#define VOLTMETER_DIV            3  // 
+
 #if IR_LED_PIN == 11
   #define IR_LED_OC2x0  COM2A0  // Toggle OC2B in
 #elif IR_LED_PIN == 3
@@ -196,10 +200,11 @@ void loop() {
 
   // 1010 0101 0011 0110 1100 1001 1000 1101 
   // $PGSTB -- Giant Slalom Timing System Gate Beacon
-  // $PGSTB,<1>,<2>,<3>*<hh>
+  // $PGSTB,<1>,<2>,<3>,<4>*<hh>
   // <1> -- Gate Type: START, FINISH, FIRST, SECOND, THIRD Intermediary 
   // <2> -- Gate ID: string of 8 hexadecimal digits
   // <3> -- RFID Card UID of current participant: string of 8 or 16 hexadecimal digits
+  // <4> -- Battery voltage X.XX
   // <hh> -- Checksum (two hexadecimal digits)
 
   String gateStart  = "START";
@@ -221,6 +226,8 @@ void loop() {
   }
 #endif
 
+  float voltage = analogRead(VOLTMETER_PIN) * (VOLTMETER_REF / 1024.0) * (VOLTMETER_DIV);
+
   // Build NMEA-0183 message string
   String gateString = "$PGSTB,";
   gateString.concat( beaconMode == __BEACON_MODE_START ? gateStart : gateFinish );
@@ -228,6 +235,8 @@ void loop() {
   gateString.concat( gateID );
   gateString.concat( "," );
   gateString.concat( gateCardUID );
+  gateString.concat( "," );
+  gateString.concat( voltage );
   gateString.toUpperCase();
   
   // Append NMEA-0183 checksum
