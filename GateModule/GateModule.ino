@@ -90,6 +90,9 @@ char beaconId[10] = "A536C98D";
 int beaconIdAddress = beaconModeAddress + sizeof(beaconMode);
 String gateID;
 
+#define LEDSACTIVITYTIMEOUT 10
+int ledsActive; 
+
 // ====================================================================
 // the setup function runs once when you press reset or power the board
 // --------------------------------------------------------------------
@@ -133,6 +136,7 @@ void setup()
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(STATUS_LED_PIN, OUTPUT);
 
+  ledsActive = LEDSACTIVITYTIMEOUT;
   pinMode(GATE_MODE_PIN_START,    OUTPUT);
   pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
   pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
@@ -192,6 +196,31 @@ void setup()
 String gateCardUID = "";
 void loop() {
 
+  if( ledsActive )
+  {
+    ledsActive--;
+    if( ! ledsActive )
+    {
+      // turn LEDs off
+      pinMode(GATE_MODE_PIN_START,    INPUT);
+      pinMode(GATE_MODE_PIN_FINISH,   INPUT);
+      pinMode(GATE_MODE_PIN_INTERIM1, INPUT);
+    }
+  }
+  int button1 = digitalRead(BUTTON_1_PIN);
+  int button2 = digitalRead(BUTTON_2_PIN);
+  if( button1 == LOW || button2 == LOW )
+  {
+    if( ! ledsActive )
+    {
+      // turn LEDs on
+      pinMode(GATE_MODE_PIN_START,    OUTPUT);
+      pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
+      pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
+    }
+    ledsActive = LEDSACTIVITYTIMEOUT;
+  }
+
   int activityLED = digitalRead(STATUS_LED_PIN);
   digitalWrite(STATUS_LED_PIN, activityLED != HIGH ? HIGH : LOW);
 
@@ -241,6 +270,7 @@ void loop() {
   gateString.concat( voltage );
   gateString.concat( "," );
   // gateString.concat( "0" );
+  gateString.concat( ledsActive ); // temporary used to report LED activity count down
   gateString.concat( "," );
   gateString.concat( millis() );
   gateString.toUpperCase();
