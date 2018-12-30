@@ -200,11 +200,13 @@ void loop() {
 
   // 1010 0101 0011 0110 1100 1001 1000 1101 
   // $PGSTB -- Giant Slalom Timing System Gate Beacon
-  // $PGSTB,<1>,<2>,<3>,<4>*<hh>
+  // $PGSTB,<1>,<2>,<3>,<4>,<5>,<6>*<hh>
   // <1> -- Gate Type: START, FINISH, FIRST, SECOND, THIRD Intermediary 
   // <2> -- Gate ID: string of 8 hexadecimal digits
   // <3> -- RFID Card UID of current participant: string of 8 or 16 hexadecimal digits
   // <4> -- Battery voltage X.XX
+  // <5> -- Local air pressure
+  // <6> -- local millisecons
   // <hh> -- Checksum (two hexadecimal digits)
 
   String gateStart  = "START";
@@ -237,6 +239,10 @@ void loop() {
   gateString.concat( gateCardUID );
   gateString.concat( "," );
   gateString.concat( voltage );
+  gateString.concat( "," );
+  // gateString.concat( "0" );
+  gateString.concat( "," );
+  gateString.concat( millis() );
   gateString.toUpperCase();
   
   // Append NMEA-0183 checksum
