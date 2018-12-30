@@ -66,6 +66,8 @@
 #define VOLTMETER_REF          3.3  // 
 #define VOLTMETER_DIV            3  // 
 
+#define LEDS_ACTIVITY_TIMEOUT   10  // in loop() cycles // comment out thic line to disable this feature
+
 #if IR_LED_PIN == 11
   #define IR_LED_OC2x0  COM2A0  // Toggle OC2B in
 #elif IR_LED_PIN == 3
@@ -90,8 +92,9 @@ char beaconId[10] = "A536C98D";
 int beaconIdAddress = beaconModeAddress + sizeof(beaconMode);
 String gateID;
 
-#define LEDSACTIVITYTIMEOUT 10
-int ledsActive; 
+#ifdef LEDS_ACTIVITY_TIMEOUT
+int ledsActive;
+#endif 
 
 // ====================================================================
 // the setup function runs once when you press reset or power the board
@@ -136,7 +139,9 @@ void setup()
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(STATUS_LED_PIN, OUTPUT);
 
-  ledsActive = LEDSACTIVITYTIMEOUT;
+#ifdef LEDS_ACTIVITY_TIMEOUT
+  ledsActive = LEDS_ACTIVITY_TIMEOUT;
+#endif 
   pinMode(GATE_MODE_PIN_START,    OUTPUT);
   pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
   pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
@@ -196,6 +201,7 @@ void setup()
 String gateCardUID = "";
 void loop() {
 
+#ifdef LEDS_ACTIVITY_TIMEOUT
   if( ledsActive )
   {
     ledsActive--;
@@ -218,8 +224,9 @@ void loop() {
       pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
       pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
     }
-    ledsActive = LEDSACTIVITYTIMEOUT;
+    ledsActive = LEDS_ACTIVITY_TIMEOUT;
   }
+#endif 
 
   int activityLED = digitalRead(STATUS_LED_PIN);
   digitalWrite(STATUS_LED_PIN, activityLED != HIGH ? HIGH : LOW);
@@ -270,7 +277,9 @@ void loop() {
   gateString.concat( voltage );
   gateString.concat( "," );
   // gateString.concat( "0" );
+#ifdef LEDS_ACTIVITY_TIMEOUT
   gateString.concat( ledsActive ); // temporary used to report LED activity count down
+#endif
   gateString.concat( "," );
   gateString.concat( millis() );
   gateString.toUpperCase();
