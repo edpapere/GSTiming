@@ -167,6 +167,22 @@ void setup()
   // Initialise UART 
   Serial.begin(4800);
 
+  if ( button1 == LOW && button2 == HIGH )        // only button #1 is pressed 
+  {
+    Serial.println("only button #1 is pressed");
+    Serial.flush();
+  }
+  else if ( button1 == HIGH && button2 == LOW )   // only button #2 is pressed
+  {
+    Serial.println("only button #2 is pressed");
+    Serial.flush();
+  }
+  else if ( button1 == LOW && button2 == LOW )    // both buttons are pressed
+  {
+    Serial.println("both buttons are pressed");
+    Serial.flush();
+  }
+
   digitalWrite(GATE_MODE_PIN_START,    HIGH);
   digitalWrite(GATE_MODE_PIN_FINISH,   LOW);
   digitalWrite(GATE_MODE_PIN_INTERIM1, HIGH);
