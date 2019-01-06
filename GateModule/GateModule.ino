@@ -64,7 +64,9 @@
 
 #define VOLTMETER_PIN           A7  // A7 -- A7
 #define VOLTMETER_REF          3.3  // 
-#define VOLTMETER_DIV            3  // 
+#define VOLTMETER_DIV          900  // 220+680 kOhm
+#define VOLTMETER_MUL          220  // 220 kOhm
+ 
 
 #define LEDS_ACTIVITY_TIMEOUT   10  // in loop() cycles // comment out thic line to disable this feature
 
@@ -285,7 +287,7 @@ void loop() {
   }
 #endif
 
-  float voltage = analogRead(VOLTMETER_PIN) * (VOLTMETER_REF / 1024.0) * (VOLTMETER_DIV);
+  float voltage = analogRead(VOLTMETER_PIN) * (VOLTMETER_REF / 1024.0) * (VOLTMETER_DIV) / (VOLTMETER_MUL);
 
   // Build NMEA-0183 message string
   String gateString = "$PGSTB,";
