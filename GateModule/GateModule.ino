@@ -167,21 +167,26 @@ void setup()
   // Initialise UART 
   Serial.begin(4800);
 
+  Serial.println();
+  Serial.println();
   if ( button1 == LOW && button2 == HIGH )        // only button #1 is pressed 
   {
     Serial.println("only button #1 is pressed");
-    Serial.flush();
   }
   else if ( button1 == HIGH && button2 == LOW )   // only button #2 is pressed
   {
     Serial.println("only button #2 is pressed");
-    Serial.flush();
   }
   else if ( button1 == LOW && button2 == LOW )    // both buttons are pressed
   {
     Serial.println("both buttons are pressed");
-    Serial.flush();
   }
+  else                                            // no button pressed
+  {
+    Serial.println("no button pressed");
+  }
+  Serial.println();
+  Serial.flush();
 
   digitalWrite(GATE_MODE_PIN_START,    HIGH);
   digitalWrite(GATE_MODE_PIN_FINISH,   LOW);
@@ -311,7 +316,7 @@ void loop() {
   gateString.concat( String( (k & 0x0F), HEX) );
   gateString.toUpperCase();
 
-  String gateString2 = "$GSTA";
+  String gateString2 = "$PGSTA";
   for(int ix=0; ix < 5; ix++)
   {
     gateString2.concat( "," + ( beaconMode == __BEACON_MODE_START ? gateStart : gateFinish ) );
