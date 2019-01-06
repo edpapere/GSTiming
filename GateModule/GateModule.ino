@@ -240,13 +240,21 @@ void loop() {
   gateString.concat( String( (k & 0xF0) >> 4, HEX) );
   gateString.concat( String( (k & 0x0F), HEX) );
   gateString.toUpperCase();
-  
-  for(int i=0; i < 5; i++) 
+
+  String gateString2 = "$GSTA";
+  for(int ix=0; ix < 5; ix++)
+  {
+    gateString2.concat( "," + ( beaconMode == __BEACON_MODE_START ? gateStart : gateFinish ) );
+  }
+  gateString2.toUpperCase();
+
+  for(int i=0; i < 4; i++) 
   { 
-   // Serial.println("$STARTGATE,A53CF86D");
-    Serial.println(gateString);
+    Serial.println(gateString2);
     Serial.flush();
   }
+    Serial.println(gateString);
+    Serial.flush();
   Serial.println("--==<>==--");
 //  Serial.println("-------------------");
   Serial.flush();
