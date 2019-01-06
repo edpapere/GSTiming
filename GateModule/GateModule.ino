@@ -62,6 +62,12 @@
 #define BUTTON_1_PIN             4  // D4 -- PD4
 #define BUTTON_2_PIN             5  // D5 -- PD5
 
+#define VOLTMETER_PIN           A7  // A7 -- A7
+#define VOLTMETER_REF          3.3  // 
+#define VOLTMETER_DIV            3  // 
+
+#define LEDS_ACTIVITY_TIMEOUT   10  // in loop() cycles // comment out thic line to disable this feature
+
 #if IR_LED_PIN == 11
   #define IR_LED_OC2x0  COM2A0  // Toggle OC2B in
 #elif IR_LED_PIN == 3
@@ -85,6 +91,10 @@ int beaconModeAddress = 0;
 char beaconId[10] = "A536C98D";
 int beaconIdAddress = beaconModeAddress + sizeof(beaconMode);
 String gateID;
+
+#ifdef LEDS_ACTIVITY_TIMEOUT
+int ledsActive;
+#endif 
 
 // ====================================================================
 // the setup function runs once when you press reset or power the board
@@ -129,6 +139,9 @@ void setup()
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(STATUS_LED_PIN, OUTPUT);
 
+#ifdef LEDS_ACTIVITY_TIMEOUT
+  ledsActive = LEDS_ACTIVITY_TIMEOUT;
+#endif 
   pinMode(GATE_MODE_PIN_START,    OUTPUT);
   pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
   pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
@@ -188,6 +201,33 @@ void setup()
 String gateCardUID = "";
 void loop() {
 
+#ifdef LEDS_ACTIVITY_TIMEOUT
+  if( ledsActive )
+  {
+    ledsActive--;
+    if( ! ledsActive )
+    {
+      // turn LEDs off
+      pinMode(GATE_MODE_PIN_START,    INPUT);
+      pinMode(GATE_MODE_PIN_FINISH,   INPUT);
+      pinMode(GATE_MODE_PIN_INTERIM1, INPUT);
+    }
+  }
+  int button1 = digitalRead(BUTTON_1_PIN);
+  int button2 = digitalRead(BUTTON_2_PIN);
+  if( button1 == LOW || button2 == LOW )
+  {
+    if( ! ledsActive )
+    {
+      // turn LEDs on
+      pinMode(GATE_MODE_PIN_START,    OUTPUT);
+      pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
+      pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
+    }
+    ledsActive = LEDS_ACTIVITY_TIMEOUT;
+  }
+#endif 
+
   int activityLED = digitalRead(STATUS_LED_PIN);
   digitalWrite(STATUS_LED_PIN, activityLED != HIGH ? HIGH : LOW);
 
@@ -196,10 +236,13 @@ void loop() {
 
   // 1010 0101 0011 0110 1100 1001 1000 1101 
   // $PGSTB -- Giant Slalom Timing System Gate Beacon
-  // $PGSTB,<1>,<2>,<3>*<hh>
+  // $PGSTB,<1>,<2>,<3>,<4>,<5>,<6>*<hh>
   // <1> -- Gate Type: START, FINISH, FIRST, SECOND, THIRD Intermediary 
   // <2> -- Gate ID: string of 8 hexadecimal digits
   // <3> -- RFID Card UID of current participant: string of 8 or 16 hexadecimal digits
+  // <4> -- Battery voltage X.XX
+  // <5> -- Local air pressure
+  // <6> -- local millisecons
   // <hh> -- Checksum (two hexadecimal digits)
 
   String gateStart  = "START";
@@ -221,6 +264,8 @@ void loop() {
   }
 #endif
 
+  float voltage = analogRead(VOLTMETER_PIN) * (VOLTMETER_REF / 1024.0) * (VOLTMETER_DIV);
+
   // Build NMEA-0183 message string
   String gateString = "$PGSTB,";
   gateString.concat( beaconMode == __BEACON_MODE_START ? gateStart : gateFinish );
@@ -228,6 +273,15 @@ void loop() {
   gateString.concat( gateID );
   gateString.concat( "," );
   gateString.concat( gateCardUID );
+  gateString.concat( "," );
+  gateString.concat( voltage );
+  gateString.concat( "," );
+  // gateString.concat( "0" );
+#ifdef LEDS_ACTIVITY_TIMEOUT
+  gateString.concat( ledsActive ); // temporary used to report LED activity count down
+#endif
+  gateString.concat( "," );
+  gateString.concat( millis() );
   gateString.toUpperCase();
   
   // Append NMEA-0183 checksum
