@@ -64,7 +64,11 @@
 
 #define VOLTMETER_PIN           A7  // A7 -- A7
 #define VOLTMETER_REF          3.3  // 
-#define VOLTMETER_DIV            3  // 
+#define VOLTMETER_DIV          900  // 220+680 kOhm
+#define VOLTMETER_MUL          220  // 220 kOhm
+ 
+
+#define LEDS_ACTIVITY_TIMEOUT   10  // in loop() cycles // comment out thic line to disable this feature
 
 #if IR_LED_PIN == 11
   #define IR_LED_OC2x0  COM2A0  // Toggle OC2B in
@@ -89,6 +93,10 @@ int beaconModeAddress = 0;
 char beaconId[10] = "A536C98D";
 int beaconIdAddress = beaconModeAddress + sizeof(beaconMode);
 String gateID;
+
+#ifdef LEDS_ACTIVITY_TIMEOUT
+int ledsActive;
+#endif 
 
 // ====================================================================
 // the setup function runs once when you press reset or power the board
@@ -133,6 +141,9 @@ void setup()
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(STATUS_LED_PIN, OUTPUT);
 
+#ifdef LEDS_ACTIVITY_TIMEOUT
+  ledsActive = LEDS_ACTIVITY_TIMEOUT;
+#endif 
   pinMode(GATE_MODE_PIN_START,    OUTPUT);
   pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
   pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
@@ -157,6 +168,27 @@ void setup()
 
   // Initialise UART 
   Serial.begin(4800);
+
+  Serial.println();
+  Serial.println();
+  if ( button1 == LOW && button2 == HIGH )        // only button #1 is pressed 
+  {
+    Serial.println("only button #1 is pressed");
+  }
+  else if ( button1 == HIGH && button2 == LOW )   // only button #2 is pressed
+  {
+    Serial.println("only button #2 is pressed");
+  }
+  else if ( button1 == LOW && button2 == LOW )    // both buttons are pressed
+  {
+    Serial.println("both buttons are pressed");
+  }
+  else                                            // no button pressed
+  {
+    Serial.println("no button pressed");
+  }
+  Serial.println();
+  Serial.flush();
 
   digitalWrite(GATE_MODE_PIN_START,    HIGH);
   digitalWrite(GATE_MODE_PIN_FINISH,   LOW);
@@ -191,6 +223,33 @@ void setup()
 // --------------------------------------------------------------------
 String gateCardUID = "";
 void loop() {
+
+#ifdef LEDS_ACTIVITY_TIMEOUT
+  if( ledsActive )
+  {
+    ledsActive--;
+    if( ! ledsActive )
+    {
+      // turn LEDs off
+      pinMode(GATE_MODE_PIN_START,    INPUT);
+      pinMode(GATE_MODE_PIN_FINISH,   INPUT);
+      pinMode(GATE_MODE_PIN_INTERIM1, INPUT);
+    }
+  }
+  int button1 = digitalRead(BUTTON_1_PIN);
+  int button2 = digitalRead(BUTTON_2_PIN);
+  if( button1 == LOW || button2 == LOW )
+  {
+    if( ! ledsActive )
+    {
+      // turn LEDs on
+      pinMode(GATE_MODE_PIN_START,    OUTPUT);
+      pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
+      pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
+    }
+    ledsActive = LEDS_ACTIVITY_TIMEOUT;
+  }
+#endif 
 
   int activityLED = digitalRead(STATUS_LED_PIN);
   digitalWrite(STATUS_LED_PIN, activityLED != HIGH ? HIGH : LOW);
@@ -228,7 +287,7 @@ void loop() {
   }
 #endif
 
-  float voltage = analogRead(VOLTMETER_PIN) * (VOLTMETER_REF / 1024.0) * (VOLTMETER_DIV);
+  float voltage = analogRead(VOLTMETER_PIN) * (VOLTMETER_REF / 1024.0) * (VOLTMETER_DIV) / (VOLTMETER_MUL);
 
   // Build NMEA-0183 message string
   String gateString = "$PGSTB,";
@@ -241,6 +300,9 @@ void loop() {
   gateString.concat( voltage );
   gateString.concat( "," );
   // gateString.concat( "0" );
+#ifdef LEDS_ACTIVITY_TIMEOUT
+  gateString.concat( ledsActive ); // temporary used to report LED activity count down
+#endif
   gateString.concat( "," );
   gateString.concat( millis() );
   gateString.toUpperCase();
@@ -255,13 +317,21 @@ void loop() {
   gateString.concat( String( (k & 0xF0) >> 4, HEX) );
   gateString.concat( String( (k & 0x0F), HEX) );
   gateString.toUpperCase();
-  
-  for(int i=0; i < 5; i++) 
+
+  String gateString2 = "$PGSTA";
+  for(int ix=0; ix < 5; ix++)
+  {
+    gateString2.concat( "," + ( beaconMode == __BEACON_MODE_START ? gateStart : gateFinish ) );
+  }
+  gateString2.toUpperCase();
+
+  for(int i=0; i < 4; i++) 
   { 
-   // Serial.println("$STARTGATE,A53CF86D");
-    Serial.println(gateString);
+    Serial.println(gateString2);
     Serial.flush();
   }
+    Serial.println(gateString);
+    Serial.flush();
   Serial.println("--==<>==--");
 //  Serial.println("-------------------");
   Serial.flush();
