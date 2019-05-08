@@ -63,7 +63,7 @@
 #define BUTTON_2_PIN             5  // D5 -- PD5
 
 #define VOLTMETER_PIN           A7  // A7 -- A7
-#define VOLTMETER_REF          3.3  // 
+#define VOLTMETER_REF          5.0  // 
 #define VOLTMETER_DIV          900  // 220+680 kOhm
 #define VOLTMETER_MUL          220  // 220 kOhm
  
