@@ -39,8 +39,9 @@
   #error "F_CPU macro is not defined"
 #endif
 
-
-
+#define TIMER_CYCLE_20   262
+#define TIMER_CYCLE_16   210
+#define TIMER_CYCLE_08   104
 
 
 #ifdef __USE_MFRC522__
