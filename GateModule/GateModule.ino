@@ -26,24 +26,6 @@
 
 //#define __USE_MFRC522__
 
-#ifdef F_CPU
-  #if F_CPU == 16000000L        //  16 MHz
-//  #define TIMER_CYCLE   209   //  f_cpu / ( 2 * f_ir ) - 1 = 16 MHz / ( 2 * 38 kHz ) - 1 = 210.526 - 1 ~ 209 => 38.095 kHz (+0.095)
-    #define TIMER_CYCLE   210   //  f_cpu / ( 2 * f_ir ) - 1 = 16 MHz / ( 2 * 38 kHz ) - 1 = 210.526 - 1 ~ 210 => 37.915 kHz (-0.085)
-  #elif F_CPU == 8000000L       //  8 MHz
-    #define TIMER_CYCLE   104   //  f_cpu / ( 2 * f_ir ) - 1 =  8 MHz / ( 2 * 38 kHz ) - 1 = 105.263 - 1 ~ 104 => 38.095 kHz (+0.095)
-  #else
-    #error "Unsupported F_CPU macro value"
-  #endif
-#else
-  #error "F_CPU macro is not defined"
-#endif
-
-#define TIMER_CYCLE_20   262
-#define TIMER_CYCLE_16   210
-#define TIMER_CYCLE_08   104
-
-
 #ifdef __USE_MFRC522__
 #include <SPI.h>
 #include <MFRC522.h>
@@ -51,17 +33,30 @@
 
 #include <EEPROM.h>
 
-//#define STATUS_LED_PIN          LED_BUILTIN
-#define STATUS_LED_PIN          15  // A1 -- PC1
+// main CPU Frequency 8 / 16 / 20
+#define CPU_FRQ_MHZ 8  
 
-#define IR_LED_PIN               3  //  3 -- OC2B (PD3) // 11 -- OC2A (PB3)
+// serial port Frequency 
+#define SERIAL_PORT_SPEED       4800
+
+
+// IR Base Frequency output pin
+// 3 -- OC2B (PD3)
+// 11 -- OC2A (PB3)
+#define IR_LED_PIN 3
+
+//#define STATUS_LED_PIN          LED_BUILTIN
+#define STATUS_LED_PIN          17  // A3 -- PC3
 
 #define GATE_MODE_PIN_START     14  // A0 -- PC0
 #define GATE_MODE_PIN_FINISH    16  // A2 -- PC2
 #define GATE_MODE_PIN_INTERIM1  15  // A1 -- PC1
+#define GATE_MODE_PIN_INTERIM2  15  // A1 -- PC1 !!! the same as INT1
 
-#define BUTTON_1_PIN             4  // D4 -- PD4
-#define BUTTON_2_PIN             5  // D5 -- PD5
+#define BUTTON_1_PIN             5  // D4 -- PD4
+#define BUTTON_2_PIN             6  // D5 -- PD5
+#define BUTTON_3_PIN             7  // D6 -- PD6
+#define BUTTON_4_PIN             8  // D7 -- PD7
 
 #define VOLTMETER_PIN           A7  // A7 -- A7
 #define VOLTMETER_REF          3.3  // 
@@ -71,10 +66,26 @@
 
 #define LEDS_ACTIVITY_TIMEOUT   10  // in loop() cycles // comment out thic line to disable this feature
 
+// IR Base Frequency output ...
+// PIN = 11 COM2A0
+// PIN =  3 COM2B0
 #if IR_LED_PIN == 11
-  #define IR_LED_OC2x0  COM2A0  // Toggle OC2B in
+  #define IR_LED_OC2x0  COM2A0  // Toggle OC2A in
 #elif IR_LED_PIN == 3
   #define IR_LED_OC2x0  COM2B0  // Toggle OC2B in
+#endif
+
+// IR Frequency timer settings = f_cpu / ( 2 * f_ir ) - 1
+// 20 MHz - 262: 20 MHz / ( 2 * 38 kHz ) - 1 = 263.158 - 1 ~ 262 => Compare Register=0.0000131500 => Frq=38.022 kHz (+0.022)
+// 16 MHz - 210: 16 MHz / ( 2 * 38 kHz ) - 1 = 210.526 - 1 ~ 210 => Compare Register=0.0000131875 => Frq=37.915 kHz (-0.085)
+//  8 MHz - 104: 8 MHz / ( 2 * 38 kHz ) - 1 = 105.263 - 1 ~ 104 => Compare Register=0.000013125 => Frq=38.095 kHz (+0.095)
+#if CPU_FRQ_MHZ == 16
+  #define TIMER_CYCLE 210
+#elif CPU_FRQ_MHZ == 20
+  #define TIMER_CYCLE 262
+#else 
+  // assume as 8mHz
+  #define TIMER_CYCLE 104
 #endif
 
 #ifdef __USE_MFRC522__
@@ -85,146 +96,157 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 
 // Run-time global variables:
 
-int beaconMode;
+int iBeaconMode = 4; // finish by default
 #define __BEACON_MODE_START   1
-#define __BEACON_MODE_FINISH  2
-int beaconModeAddress = 0;
+#define __BEACON_MODE_INT1    2
+#define __BEACON_MODE_INT2    3
+#define __BEACON_MODE_FINISH  4
+int iBeaconModeAddress = 0;
 
 #define BEACON_ID char[10]
-char beaconId[10] = "A536C98D";
-int beaconIdAddress = beaconModeAddress + sizeof(beaconMode);
+char chBeaconId[10] = "A536C98D";
+int iBeaconIdAddress = iBeaconModeAddress + sizeof(iBeaconMode);
 String gateID;
 
 #ifdef LEDS_ACTIVITY_TIMEOUT
 int ledsActive;
 #endif 
 
+int     giSignalLength  = 3;
+String  gsGateTp        = "UNKN";
+String  gsGateSignal    = "UNKNUNKNUNKN";
+String  gateCardUID = "";
+
+String getGateIdStr()
+{
+  switch(iBeaconMode)
+  {
+    case __BEACON_MODE_START:
+    gsGateTp="STRT";
+    break;
+    case __BEACON_MODE_INT1:
+    gsGateTp="INT1"; 
+    break;
+    case __BEACON_MODE_INT2:
+    gsGateTp="INT2";  
+    break;
+    case __BEACON_MODE_FINISH:
+    gsGateTp="FNSH";   
+    break;
+    default:
+    gsGateTp="UNKN";   
+    break;
+  }
+  gsGateSignal="";
+  for(int i=0; i < giSignalLength; i++)
+  {
+    gsGateSignal.concat( gsGateTp );
+  }
+  return(gsGateTp);
+}
+
+int readConfig()
+{
+  // Get current configuration from EEPROM
+  EEPROM.get(iBeaconModeAddress,iBeaconMode);
+  EEPROM.get(iBeaconIdAddress,chBeaconId);
+  gateID = String(chBeaconId);
+  
+  // Setup control buttons and read their state:
+  pinMode(BUTTON_1_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_2_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_3_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_4_PIN, INPUT_PULLUP);
+  int button1 = digitalRead(BUTTON_1_PIN);
+  int button2 = digitalRead(BUTTON_2_PIN);
+  int button3 = digitalRead(BUTTON_3_PIN);
+  int button4 = digitalRead(BUTTON_4_PIN);
+
+  // Set and save configuration according to combination of button pressed 
+  if ( button1 == LOW )        // DIP #1 is on 
+  {
+    // Configure module as Start Gate Beacon 
+    iBeaconMode = __BEACON_MODE_START;
+  }
+  else if ( button2 == LOW )   // DIP #2 is on
+  {
+    // Configure module as Finish Gate Beacon 
+    iBeaconMode = __BEACON_MODE_INT1;
+  }
+  else if ( button3 == LOW )    // DIP #3 is on
+  {
+    // Configure module as Finish Gate Beacon and set default Beacon ID 
+    iBeaconMode = __BEACON_MODE_INT2;
+  }
+  else if ( button4 == LOW )    // DIP #4 is on
+  {
+    // Configure module as Finish Gate Beacon and set default Beacon ID 
+    iBeaconMode = __BEACON_MODE_FINISH;
+  }
+  EEPROM.put(iBeaconModeAddress,iBeaconMode);
+  EEPROM.put(iBeaconIdAddress,chBeaconId);
+  return(iBeaconMode);
+}
+
+void setupIRTransmitter()
+{
+  // Setup IR output pin
+  pinMode (IR_LED_PIN, OUTPUT);
+  delay(100);
+    
+  // Configure 38kHz output to IR base rate output pin
+  // http://forum.arduino.cc/index.php?topic=102430.msg769421#msg769421
+  // set up Timer 2
+  TCCR2A = _BV (IR_LED_OC2x0) | _BV(WGM21); // CTC, toggle register (OC2A or OC2B) on Compare Match
+  TCCR2B = _BV (CS20); // No prescaler
+  OCR2A = TIMER_CYCLE; // set compare A register value = (TIMER_CYCLE+1) * clock speed to get output ~38kHz
+  delay(100);
+}
+
 // ====================================================================
 // the setup function runs once when you press reset or power the board
 // --------------------------------------------------------------------
 void setup() 
 {
-  
-  // Setup control buttons and read their state:
-  pinMode(BUTTON_1_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_2_PIN, INPUT_PULLUP);
-  int button1 = digitalRead(BUTTON_1_PIN);
-  int button2 = digitalRead(BUTTON_2_PIN);
-
-  // Set and save configuration according to combination of button pressed 
-  if ( button1 == LOW && button2 == HIGH )        // only button #1 is pressed 
-  {
-    // Configure module as Start Gate Beacon 
-    beaconMode = __BEACON_MODE_START;
-    EEPROM.put(beaconModeAddress,beaconMode);
-  }
-  else if ( button1 == HIGH && button2 == LOW )   // only button #2 is pressed
-  {
-    // Configure module as Finish Gate Beacon 
-    beaconMode = __BEACON_MODE_FINISH;
-    EEPROM.put(beaconModeAddress,beaconMode);
-  }
-  else if ( button1 == LOW && button2 == LOW )    // both buttons are pressed
-  {
-    // Configure module as Finish Gate Beacon and set default Beacon ID 
-    beaconMode = __BEACON_MODE_FINISH;
-    EEPROM.put(beaconModeAddress,beaconMode);
-    EEPROM.put(beaconIdAddress,beaconId);
-  }
-  
-  // Get current configuration from EEPROM
-  EEPROM.get(beaconModeAddress,beaconMode);
-  EEPROM.get(beaconIdAddress,beaconId);
-  gateID = String(beaconId);
-
   // --------------------------------
-  
+  readConfig(); // get gate mode
+  getGateIdStr(); // retreave gate id string
+    
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(STATUS_LED_PIN, OUTPUT);
+  setupIRTransmitter();
 
+  // Initialise UART 
+  // configurate port
+  Serial.begin(SERIAL_PORT_SPEED); // should be x2 of Computer serial speed
+  delay(100);
+
+  //Serial.println("Mode = "+gsGateTp);
+  //Serial.println();
+  //Serial.flush();
+  //delay(100);
+/*
 #ifdef LEDS_ACTIVITY_TIMEOUT
   ledsActive = LEDS_ACTIVITY_TIMEOUT;
 #endif 
   pinMode(GATE_MODE_PIN_START,    OUTPUT);
   pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
   pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
-  digitalWrite(GATE_MODE_PIN_START,    LOW);
-  digitalWrite(GATE_MODE_PIN_FINISH,   HIGH);
-  digitalWrite(GATE_MODE_PIN_INTERIM1, HIGH);
-  delay(200);
-
-  // Configure 38 kHz output
-  // http://forum.arduino.cc/index.php?topic=102430.msg769421#msg769421
-  // Setup IR output
-  pinMode (IR_LED_PIN, OUTPUT);
-  // set up Timer 2
-  TCCR2A = _BV (IR_LED_OC2x0) | _BV(WGM21);   // CTC, toggle OC2A or OC2B on Compare Match
-  TCCR2B = _BV (CS20);                        // No prescaler
-  OCR2A =  TIMER_CYCLE;                       // compare A register value = f_cpu / ( 2 * f_ir ) - 1
-
-  digitalWrite(GATE_MODE_PIN_START,    HIGH);
-  digitalWrite(GATE_MODE_PIN_FINISH,   HIGH);
-  digitalWrite(GATE_MODE_PIN_INTERIM1, LOW);
-  delay(200);
-
-  // Initialise UART 
-  Serial.begin(4800);
-
-  Serial.println();
-  Serial.println();
-  if ( button1 == LOW && button2 == HIGH )        // only button #1 is pressed 
-  {
-    Serial.println("only button #1 is pressed");
-  }
-  else if ( button1 == HIGH && button2 == LOW )   // only button #2 is pressed
-  {
-    Serial.println("only button #2 is pressed");
-  }
-  else if ( button1 == LOW && button2 == LOW )    // both buttons are pressed
-  {
-    Serial.println("both buttons are pressed");
-  }
-  else                                            // no button pressed
-  {
-    Serial.println("no button pressed");
-  }
-  Serial.println();
-  Serial.flush();
-
-  digitalWrite(GATE_MODE_PIN_START,    HIGH);
-  digitalWrite(GATE_MODE_PIN_FINISH,   LOW);
-  digitalWrite(GATE_MODE_PIN_INTERIM1, HIGH);
-  delay(200);
-
-  digitalWrite(GATE_MODE_PIN_START,    HIGH);
-  digitalWrite(GATE_MODE_PIN_FINISH,   HIGH);
-  digitalWrite(GATE_MODE_PIN_INTERIM1, HIGH);
-  delay(200);
-
+*/
+/*
 #ifdef __USE_MFRC522__
   SPI.begin();      // Initiate  SPI bus
   mfrc522.PCD_Init();   // Initiate MFRC522
 #endif
-
-  digitalWrite(GATE_MODE_PIN_START,    LOW);
-  digitalWrite(GATE_MODE_PIN_FINISH,   LOW);
-  digitalWrite(GATE_MODE_PIN_INTERIM1, LOW);
-  delay(200);
-
-  digitalWrite(GATE_MODE_PIN_START,    HIGH);
-  digitalWrite(GATE_MODE_PIN_FINISH,   HIGH);
-  digitalWrite(GATE_MODE_PIN_INTERIM1, HIGH);
-  delay(200);
-
+*/
 }
-
 
 // ====================================================================
 // the loop function runs over and over again forever
 // --------------------------------------------------------------------
-String gateCardUID = "";
-void loop() {
-
+void loop() 
+{
+/*
 #ifdef LEDS_ACTIVITY_TIMEOUT
   if( ledsActive )
   {
@@ -237,6 +259,7 @@ void loop() {
       pinMode(GATE_MODE_PIN_INTERIM1, INPUT);
     }
   }
+
   int button1 = digitalRead(BUTTON_1_PIN);
   int button2 = digitalRead(BUTTON_2_PIN);
   if( button1 == LOW || button2 == LOW )
@@ -251,12 +274,13 @@ void loop() {
     ledsActive = LEDS_ACTIVITY_TIMEOUT;
   }
 #endif 
+*/
 
-  int activityLED = digitalRead(STATUS_LED_PIN);
-  digitalWrite(STATUS_LED_PIN, activityLED != HIGH ? HIGH : LOW);
+  //int activityLED = digitalRead(STATUS_LED_PIN);
+  //digitalWrite(STATUS_LED_PIN, activityLED != HIGH ? HIGH : LOW);
 
-  digitalWrite(GATE_MODE_PIN_START,  beaconMode == __BEACON_MODE_START);
-  digitalWrite(GATE_MODE_PIN_FINISH, beaconMode == __BEACON_MODE_FINISH);
+  //digitalWrite(GATE_MODE_PIN_START,  iBeaconMode == __BEACON_MODE_START);
+  //digitalWrite(GATE_MODE_PIN_FINISH, iBeaconMode == __BEACON_MODE_FINISH);
 
   // 1010 0101 0011 0110 1100 1001 1000 1101 
   // $PGSTB -- Giant Slalom Timing System Gate Beacon
@@ -268,9 +292,6 @@ void loop() {
   // <5> -- Local air pressure
   // <6> -- local millisecons
   // <hh> -- Checksum (two hexadecimal digits)
-
-  String gateStart  = "START";
-  String gateFinish = "FINISH";
 
 #ifdef __USE_MFRC522__
   // Read RFID card
@@ -288,11 +309,26 @@ void loop() {
   }
 #endif
 
+  // send signal
+  //for(int i=0; i < 100; i++) 
+  { 
+    Serial.println(gsGateSignal);
+    Serial.flush();
+    //delay(5);
+  }
+  delay(200);
+}
+
+/*
+String getNMEA0183Message()
+{
   float voltage = analogRead(VOLTMETER_PIN) * (VOLTMETER_REF / 1024.0) * (VOLTMETER_DIV) / (VOLTMETER_MUL);
 
   // Build NMEA-0183 message string
   String gateString = "$PGSTB,";
-  gateString.concat( beaconMode == __BEACON_MODE_START ? gateStart : gateFinish );
+  //gateString.concat( iBeaconMode == __BEACON_MODE_START ? gateStart : gateFinish );
+
+  gateString.concat( gsGateTp );
   gateString.concat( "," );
   gateString.concat( gateID );
   gateString.concat( "," );
@@ -319,33 +355,6 @@ void loop() {
   gateString.concat( String( (k & 0x0F), HEX) );
   gateString.toUpperCase();
 
-  String gateString2 = "$PGSTA";
-  for(int ix=0; ix < 5; ix++)
-  {
-    gateString2.concat( "," + ( beaconMode == __BEACON_MODE_START ? gateStart : gateFinish ) );
-  }
-  gateString2.toUpperCase();
-
-  for(int i=0; i < 4; i++) 
-  { 
-    Serial.println(gateString2);
-    Serial.flush();
-  }
-    Serial.println(gateString);
-    Serial.flush();
-  Serial.println("--==<>==--");
-//  Serial.println("-------------------");
-  Serial.flush();
-
-  delay(50);
-
-//    Serial.print( "#########$StartGate - " );
-//    Serial.print( IntToStrLen(h,2) + ":" + IntToStrLen(m,2) + ":" + IntToStrLen(s,2) + "." + IntToStrLen(ms,3) );
-//    Serial.println( ".........1.........2.........3.........4.........5.........6.........7.........8.........9.........A" );
-//    Serial.println( "(2)......1.........2.........3.........4.........5.........6.........7.........8.........9.........A" );
-//    Serial.println( "(3)......1.........2.........3.........4" );
-//    Serial.println();
-//    Serial.flush();
-//    delay(50);                       // wait for a second
-
+  return(gateString);
 }
+*/
