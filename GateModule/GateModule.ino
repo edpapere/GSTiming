@@ -34,7 +34,7 @@
 #include <EEPROM.h>
 
 // main CPU Frequency 8 / 16 / 20
-#define CPU_FRQ_MHZ 8  
+#define CPU_FRQ_MHZ 16  
 
 // serial port Frequency 
 #define SERIAL_PORT_SPEED       4800
@@ -48,15 +48,10 @@
 //#define STATUS_LED_PIN          LED_BUILTIN
 #define STATUS_LED_PIN          17  // A3 -- PC3
 
-#define GATE_MODE_PIN_START     14  // A0 -- PC0
-#define GATE_MODE_PIN_FINISH    16  // A2 -- PC2
-#define GATE_MODE_PIN_INTERIM1  15  // A1 -- PC1
-#define GATE_MODE_PIN_INTERIM2  15  // A1 -- PC1 !!! the same as INT1
-
-#define BUTTON_1_PIN             5  // D4 -- PD4
-#define BUTTON_2_PIN             6  // D5 -- PD5
-#define BUTTON_3_PIN             7  // D6 -- PD6
-#define BUTTON_4_PIN             8  // D7 -- PD7
+#define GATE_MODE_DIP_1_PIN     5  // D4 -- PD4
+#define GATE_MODE_DIP_2_PIN     6  // D5 -- PD5
+#define GATE_MODE_DIP_3_PIN     7  // D6 -- PD6
+#define GATE_MODE_DIP_4_PIN     8  // D7 -- PD7
 
 #define VOLTMETER_PIN           A7  // A7 -- A7
 #define VOLTMETER_REF          3.3  // 
@@ -76,13 +71,13 @@
 #endif
 
 // IR Frequency timer settings = f_cpu / ( 2 * f_ir ) - 1
-// 20 MHz - 262: 20 MHz / ( 2 * 38 kHz ) - 1 = 263.158 - 1 ~ 262 => Compare Register=0.0000131500 => Frq=38.022 kHz (+0.022)
+// 20 MHz - 262: 20 MHz / ( 2 * 38 kHz ) - 1 = 263.158 - 1 ~ 263 => Compare Register=0.0000131500 => Frq=38.022 kHz (+0.022)
 // 16 MHz - 210: 16 MHz / ( 2 * 38 kHz ) - 1 = 210.526 - 1 ~ 210 => Compare Register=0.0000131875 => Frq=37.915 kHz (-0.085)
 //  8 MHz - 104: 8 MHz / ( 2 * 38 kHz ) - 1 = 105.263 - 1 ~ 104 => Compare Register=0.000013125 => Frq=38.095 kHz (+0.095)
 #if CPU_FRQ_MHZ == 16
   #define TIMER_CYCLE 210
 #elif CPU_FRQ_MHZ == 20
-  #define TIMER_CYCLE 262
+  #define TIMER_CYCLE 263
 #else 
   // assume as 8mHz
   #define TIMER_CYCLE 104
@@ -131,7 +126,7 @@ String getGateIdStr()
     gsGateTp="INT2";  
     break;
     case __BEACON_MODE_FINISH:
-    gsGateTp="FNSH";   
+    gsGateTp="FFFF";//"FNSH";   
     break;
     default:
     gsGateTp="UNKN";   
@@ -153,32 +148,33 @@ int readConfig()
   gateID = String(chBeaconId);
   
   // Setup control buttons and read their state:
-  pinMode(BUTTON_1_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_2_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_3_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_4_PIN, INPUT_PULLUP);
-  int button1 = digitalRead(BUTTON_1_PIN);
-  int button2 = digitalRead(BUTTON_2_PIN);
-  int button3 = digitalRead(BUTTON_3_PIN);
-  int button4 = digitalRead(BUTTON_4_PIN);
+  pinMode(GATE_MODE_DIP_1_PIN, INPUT_PULLUP);
+  pinMode(GATE_MODE_DIP_2_PIN, INPUT_PULLUP);
+  pinMode(GATE_MODE_DIP_3_PIN, INPUT_PULLUP);
+  pinMode(GATE_MODE_DIP_4_PIN, INPUT_PULLUP);
+  
+  int iDipPin1 = digitalRead(GATE_MODE_DIP_1_PIN);
+  int iDipPin2 = digitalRead(GATE_MODE_DIP_2_PIN);
+  int iDipPin3 = digitalRead(GATE_MODE_DIP_3_PIN);
+  int iDipPin4 = digitalRead(GATE_MODE_DIP_4_PIN);
 
   // Set and save configuration according to combination of button pressed 
-  if ( button1 == LOW )        // DIP #1 is on 
+  if ( iDipPin1 == LOW )        // DIP #1 is on 
   {
     // Configure module as Start Gate Beacon 
     iBeaconMode = __BEACON_MODE_START;
   }
-  else if ( button2 == LOW )   // DIP #2 is on
+  else if ( iDipPin2 == LOW )   // DIP #2 is on
   {
     // Configure module as Finish Gate Beacon 
     iBeaconMode = __BEACON_MODE_INT1;
   }
-  else if ( button3 == LOW )    // DIP #3 is on
+  else if ( iDipPin3 == LOW )    // DIP #3 is on
   {
     // Configure module as Finish Gate Beacon and set default Beacon ID 
     iBeaconMode = __BEACON_MODE_INT2;
   }
-  else if ( button4 == LOW )    // DIP #4 is on
+  else if ( iDipPin4 == LOW )    // DIP #4 is on
   {
     // Configure module as Finish Gate Beacon and set default Beacon ID 
     iBeaconMode = __BEACON_MODE_FINISH;
@@ -220,25 +216,6 @@ void setup()
   // configurate port
   Serial.begin(SERIAL_PORT_SPEED); // should be x2 of Computer serial speed
   delay(100);
-
-  //Serial.println("Mode = "+gsGateTp);
-  //Serial.println();
-  //Serial.flush();
-  //delay(100);
-/*
-#ifdef LEDS_ACTIVITY_TIMEOUT
-  ledsActive = LEDS_ACTIVITY_TIMEOUT;
-#endif 
-  pinMode(GATE_MODE_PIN_START,    OUTPUT);
-  pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
-  pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
-*/
-/*
-#ifdef __USE_MFRC522__
-  SPI.begin();      // Initiate  SPI bus
-  mfrc522.PCD_Init();   // Initiate MFRC522
-#endif
-*/
 }
 
 // ====================================================================
@@ -246,36 +223,6 @@ void setup()
 // --------------------------------------------------------------------
 void loop() 
 {
-/*
-#ifdef LEDS_ACTIVITY_TIMEOUT
-  if( ledsActive )
-  {
-    ledsActive--;
-    if( ! ledsActive )
-    {
-      // turn LEDs off
-      pinMode(GATE_MODE_PIN_START,    INPUT);
-      pinMode(GATE_MODE_PIN_FINISH,   INPUT);
-      pinMode(GATE_MODE_PIN_INTERIM1, INPUT);
-    }
-  }
-
-  int button1 = digitalRead(BUTTON_1_PIN);
-  int button2 = digitalRead(BUTTON_2_PIN);
-  if( button1 == LOW || button2 == LOW )
-  {
-    if( ! ledsActive )
-    {
-      // turn LEDs on
-      pinMode(GATE_MODE_PIN_START,    OUTPUT);
-      pinMode(GATE_MODE_PIN_FINISH,   OUTPUT);
-      pinMode(GATE_MODE_PIN_INTERIM1, OUTPUT);
-    }
-    ledsActive = LEDS_ACTIVITY_TIMEOUT;
-  }
-#endif 
-*/
-
   //int activityLED = digitalRead(STATUS_LED_PIN);
   //digitalWrite(STATUS_LED_PIN, activityLED != HIGH ? HIGH : LOW);
 
@@ -316,45 +263,5 @@ void loop()
     Serial.flush();
     //delay(5);
   }
-  delay(200);
+  delay(1000);
 }
-
-/*
-String getNMEA0183Message()
-{
-  float voltage = analogRead(VOLTMETER_PIN) * (VOLTMETER_REF / 1024.0) * (VOLTMETER_DIV) / (VOLTMETER_MUL);
-
-  // Build NMEA-0183 message string
-  String gateString = "$PGSTB,";
-  //gateString.concat( iBeaconMode == __BEACON_MODE_START ? gateStart : gateFinish );
-
-  gateString.concat( gsGateTp );
-  gateString.concat( "," );
-  gateString.concat( gateID );
-  gateString.concat( "," );
-  gateString.concat( gateCardUID );
-  gateString.concat( "," );
-  gateString.concat( voltage );
-  gateString.concat( "," );
-  // gateString.concat( "0" );
-#ifdef LEDS_ACTIVITY_TIMEOUT
-  gateString.concat( ledsActive ); // temporary used to report LED activity count down
-#endif
-  gateString.concat( "," );
-  gateString.concat( millis() );
-  gateString.toUpperCase();
-  
-  // Append NMEA-0183 checksum
-  char k = 0;
-  for(int l=1; l < gateString.length(); l++)
-  {
-    k ^= gateString.charAt(l);
-  }
-  gateString.concat("*");
-  gateString.concat( String( (k & 0xF0) >> 4, HEX) );
-  gateString.concat( String( (k & 0x0F), HEX) );
-  gateString.toUpperCase();
-
-  return(gateString);
-}
-*/
